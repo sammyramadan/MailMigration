@@ -1,0 +1,119 @@
+# Load the Exchange module
+Add-PSSnapin Microsoft.Exchange.Management.PowerShell.SnapIn
+
+# Define a function to get the CSV location
+function Get-CSVLocation ($FileName) {
+    # Set the base path for the CSV files
+    $BasePath = "C:\\Users\tnscadmin\Desktop\"
+
+    # Return the full path by appending the file name
+    return $BasePath + $FileName
+}
+
+# Get the users who have logged on in the last 90 days
+$Users = Get-ADuser -filter * -properties * | where-object {$_.LastLogonDate -gt (Get-Date).AddDays(-90)}| select Name,LastLogonDate,LastLogon,lastlogontimestamp
+
+# Export the users to a CSV file
+$Users | Export-Csv -Path (Get-CSVLocation "Users.csv") -NoTypeInformation
+
+# Get the mailboxes and their statistics
+$Mailboxes = Get-Mailbox | select UserPrincipalName, Identity, Guid, distinguishedname
+$MailboxStats = @()
+Foreach ($Mailbox in $Mailboxes){
+    $Stats = Get-MailboxStatistics -identity $Mailbox.distinguishedname | select DisplayName,@{label="TotSize";expression={[math]::Round(($_.TotalItemSize.value.ToString().Split("(")[1].Split(" ")[0].Replace(",","")/1024MB),2)}},LastLogonTime,ItemCount
+    $Stats | Add-Member -MemberType NoteProperty -Name UserPrincipalName -Value $Mailbox.UserPrincipalName
+    $Stats | Add-Member -MemberType NoteProperty -Name Identity -Value $Mailbox.Identity
+    $Stats | Add-Member -MemberType NoteProperty -Name Guid -Value $Mailbox.Guid
+    $MailboxStats += $Stats
+}
+
+# Export the mailbox statistics to a CSV file
+$MailboxStats | Export-Csv -Path (Get-CSVLocation "MailboxStats.csv") -NoTypeInformation
+
+# Get the inbox rules for each mailbox
+$InboxRules = @()
+Foreach ($Mailbox in $Mailboxes){
+    $Rules = Get-InboxRule -Mailbox $Mailbox.Identity
+    Foreach ($Rule in $Rules){
+        $Rule | Add-Member -MemberType NoteProperty -Name UserPrincipalName -Value $Mailbox.UserPrincipalName
+        $Rule | Add-Member -MemberType NoteProperty -Name DisplayName -Value $Mailbox.DisplayName
+        $InboxRules += $Rule
+    }
+}
+
+# Export the inbox rules to a CSV file
+$InboxRules | Select-Object UserPrincipalName, DisplayName, Name, Enabled, RuleIdentity, Description | Export-Csv -Path (Get-CSVLocation "InboxRules.csv") -NoTypeInformation
+
+# Get the public folder statistics
+$PublicFolders = Get-PublicFolderStatistics |Select ItemCount, LastModificationTime
+
+# Export the public folder statistics to a CSV file
+$PublicFolders | Export-Csv -Path (Get-CSVLocation "PublicFolders.csv") -NoTypeInformation
+
+# Get the shared mailboxes
+$SharedMailboxes = Get-Mailbox -RecipientTypeDetails SharedMailbox -ResultSize 1000 | Select-Object DisplayName, Alias, UserPrincipalName
+
+# Export the shared mailboxes to a CSV file
+$SharedMailboxes | Export-Csv -Path (Get-CSVLocation "SharedMailboxes.csv") -NoTypeInformation
+
+# Get the subfolder count for each mailbox
+$Subfolders = @()
+Foreach ($Mailbox in $Mailboxes){
+    $SubfolderCount = (Get-MailboxFolderStatistics -Identity $Mailbox.DistinguishedName).Count
+    $Subfolders += [PSCustomObject]@{
+        UserPrincipalName = $Mailbox.UserPrincipalName
+        DisplayName = $Mailbox.DisplayName
+        SubfolderCount = $SubfolderCount
+    }
+}
+
+# Export the subfolder count to a CSV file
+$Subfolders | Export-Csv -Path (Get-CSVLocation "Subfolders.csv") -NoTypeInformation
+
+# Get the custom send connectors
+$SendConnectors = Get-SendConnector | Select-Object Identity, AddressSpaces, SmartHosts, Enabled
+
+# Export the custom send connectors to a CSV file
+$SendConnectors | Export-Csv -Path (Get-CSVLocation "SendConnectors.csv") -NoTypeInformation
+
+# Get the custom receive connectors
+$ReceiveConnectors = Get-receiveConnector | Select-Object Identity, bindings, ProtocolLoggingLevel, Enabled
+
+# Export the custom receive connectors to a CSV file
+$ReceiveConnectors | Export-Csv -Path (Get-CSVLocation "ReceiveConnectors.csv") -NoTypeInformation
+
+# Get the transport rules
+$TransportRules = Get-TransportRule
+
+# Export the transport rules to a CSV file
+$TransportRules | Export-Csv -Path (Get-CSVLocation "TransportRules.csv") -NoTypeInformation
+
+# Get the antispam filtering report
+$AntispamReport = Get-AntispamFilteringReport
+
+# Export the antispam filtering report to a CSV file
+$AntispamReport | Export-Csv -Path (Get-CSVLocation "AntispamReport.csv") -NoTypeInformation
+
+# Get the journal rules
+$JournalRules = Get-JournalRule
+
+# Export the journal rules to a CSV file
+$JournalRules | Export-Csv -Path (Get-CSVLocation "JournalRules.csv") -NoTypeInformation
+
+# Get the accepted domains
+$AcceptedDomains = Get-AcceptedDomain
+
+# Export the accepted domains to a CSV file
+$AcceptedDomains | Export-Csv -Path (Get-CSVLocation "AcceptedDomains.csv") -NoTypeInformation
+
+# Get the distribution groups
+$DistributionGroups = Get-DistributionGroup -ResultSize 1000 | Select Name, DisplayName, PrimarySmtpAddress
+
+# Export the distribution groups to a CSV file
+$DistributionGroups | Export-Csv -Path (Get-CSVLocation "DistributionGroups.csv") -NoTypeInformation
+
+# Get the mail contacts
+$MailContacts = Get-MailContact -ResultSize 1000 | Select DisplayName, ExternalEmailAddress
+
+# Export the mail contacts to a CSV file
+$MailContacts | Export-Csv -Path (Get-CSVLocation "MailContacts.csv") -NoTypeInformation
